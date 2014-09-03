@@ -80,5 +80,3 @@ mydata= mydata.drop_duplicates('name')
 
 
 mydata.to_csv('data/Dico_gender.csv')
-
-
