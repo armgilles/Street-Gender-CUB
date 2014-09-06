@@ -2,8 +2,23 @@
 import pandas as pd
 import urllib2
 import os
+import string
 import nltk
+import numpy as np
 from nltk.corpus import stopwords
+
+
+
+
+def clean_caract(x):
+     try:
+        t = string.maketrans('','')
+        nodigits = t.translate(t, string.digits)
+        #return float(str(x).translate(t, nodigits)) version Alex
+        return x[:1] + str(x[1:]).translate(t, nodigits)
+     except:
+        return np.NaN
+
 
 cwd = os.getcwd()
 cwd_data = os.path.join(cwd, 'data')
@@ -95,11 +110,8 @@ drop_cols = ['GID', 'DOMANIAL', 'IDENT', 'MOTD', 'NUMEROFR', 'NUMEROEU', 'CDATE'
 street = street_load.drop(drop_cols, axis=1)
 cols_street = ['type', 'street_simple', 'code_riv', 'street_full', 'code_commune']
 street.columns = cols_street
-
-#Dropint null value in code_commune (53 values)
-street = street.dropna(subset=['code_commune'])
-#street['code_ilot'] = street['code_ilot'].astype(int)
-
+# Nettoyage des code_riv (Caractere présent)
+street['code_riv'] = street['code_riv'].apply(clean_caract)
 
 street['type'] = street['type'].str.lower()
 street['type_full'] = street['type'].map({'ave' : 'Avenue',
@@ -152,8 +164,13 @@ street['type_full'] = street['type'].map({'ave' : 'Avenue',
                                         'pinf': 'Passage Inférieur',
                                         'cd': 'Route Départementale'})
 
+#Dropint null value in code_commune (53 values)
+street = street.dropna(subset=['code_commune'])
+# Creating ID for Street (to join with Quartier)
+street['code_commune'] = street['code_commune'].astype(int) # ?? Demander explication à Alex pourquoi cast Int puis STR pour enlever ".0"
+street['code_riv_commune'] = street['code_riv'] + street['code_commune'].astype(str) + street['type_full'].apply(lambda x: x[:2].lower())
+
 print "Working on CUB's City file..."    
-# commune.GID = street.code_commune
 
 # Certaines rue n'ont pas de code commune
 #len(street[street.code_commune.isnull()]) = 53
@@ -171,21 +188,37 @@ print "Working on Ilot INSEE file..."
 ilot = pd.read_csv(data_path_INSEE)
 cols_ilot = ['ILOT_id', 'ILOT_code_ilot', 'ILOT_numero', 'ILOT_abscisse', 'ILOT_ordonnées', 'ILOT_orientation', 'ILOT_pop_municipale', 'ILOT_pop_compté_a_part', 'ILOT_pop_totale', 'ILOT_pop_sans_double_compte','ILOT_nbr_residence_prin', 'ILOT_nbr_residence_secon','ILOT_NB_LOG_O', 'ILOT_nbr_logement_vancant', 'ILOT_nbr_logement_total', 'ILOT_date_creation', 'ILOT_date_modif']
 ilot.columns = cols_ilot
-#ilot['ILOT_code_ilot'] = ilot['ILOT_code_ilot'].astype(int)
 ilot['ILOT_code_ilot_normalise'] = ilot['ILOT_code_ilot'].map(lambda x: x[:3]).astype(int)
 ilot_grouped = ilot.groupby(['ILOT_code_ilot_normalise'])['ILOT_pop_municipale','ILOT_pop_compté_a_part',
                                                         'ILOT_pop_totale', 'ILOT_pop_sans_double_compte', 
                                                         'ILOT_nbr_residence_prin', 'ILOT_nbr_residence_secon', 
                                                         'ILOT_NB_LOG_O', 'ILOT_nbr_logement_vancant',
-                                                        'ILOT_nbr_logement_total'].sum()
+                                                        'ILOT_nbr_logement_total'].sum().reset_index()
                                                         
 print "Merging commune's street and features of INSEE's ilot..."
 cub_street_enrich = pd.merge(street_commune, ilot_grouped,
                     left_on='COM_code_ilot', right_on='ILOT_code_ilot_normalise',
                     how='left')
 
-#quartier_bdx = pd.read_csv(data_path_quartier_bdx, sep=';')
+print "Working on CUB's City file..." 
+
+quartier_bdx = pd.read_csv(data_path_quartier_bdx, sep=';')
+grouped_quartier = quartier_bdx.groupby(['CODERIVOLI', 'NOMQUARTIER','LIBELLEVOIE', 'TYPEVOIE', 'CODEPOSTAL']).count().reset_index()
+grouped_quartier = pd.DataFrame(grouped_quartier[['CODERIVOLI','NOMQUARTIER', 'LIBELLEVOIE', 'TYPEVOIE', 'CODEPOSTAL']])
+cols_grouped_quartier = ['QUAR_code_rivoli', 'QUAR_nom_quartier','QUAR_nom_voie', 'QUAR_type', 'QUAR_code_postal']
+grouped_quartier.columns = cols_grouped_quartier
+grouped_quartier['QUAR_type'] = grouped_quartier['QUAR_type'].str.lower()
+grouped_quartier['QUAR_type'] = grouped_quartier['QUAR_type'].str.replace('É','e')
+
+#grouped_quartier['QUAR_type'] = grouped_quartier['QUAR_type'].map({'rÉsidence' : 'residence',
+#                                                                'Échangeur' : 'echangeur'})
+grouped_quartier['QUAR_code_rivoli'] = grouped_quartier['QUAR_code_rivoli'].apply(clean_caract)
+grouped_quartier['QUAR_code_rivoli_commune'] = grouped_quartier['QUAR_code_rivoli'] + '18' + grouped_quartier['QUAR_type'].apply(lambda x: x[:2]) # Bordeaux Code Commune
 
 
+Cub_data = pd.merge(cub_street_enrich, grouped_quartier, left_on='code_riv_commune', right_on='QUAR_code_rivoli_commune', how='left')
 
-
+""" TO DO
+Check Features Ilot_pop et data Street
+jointure entre street_commune et ilot
+"""
