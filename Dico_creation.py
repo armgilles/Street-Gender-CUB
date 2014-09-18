@@ -35,7 +35,7 @@ data1 = data1[cols]
 
 
 
-#Loading the seconde dico of gender name
+#Loading seconde file dico of gender name
 file_name2 = 'Gender2.csv'
 data2_path = os.path.join(cwd_data, file_name2)
 
@@ -79,4 +79,4 @@ mydata = mydata.drop('sort_genre', axis=1)
 mydata= mydata.drop_duplicates('name')
 
 
-mydata.to_csv('data/Dico_gender.csv')
+mydata.to_csv('data/result/Dico_gender.csv')

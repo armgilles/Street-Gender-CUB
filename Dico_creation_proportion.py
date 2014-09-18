@@ -3,7 +3,6 @@ import pandas as pd
 import urllib2
 import os
 
-
 cwd = os.getcwd()
 cwd_data = os.path.join(cwd, 'data')
 
@@ -33,6 +32,7 @@ prenom_annee = pd.read_csv(data_path, sep=';', skiprows=1, names=['prenoms', 'se
 prenom_annee = prenom_annee.dropna()
 # On supprime les naissances sous 'X'
 prenom_annee = prenom_annee[prenom_annee.sexe != 'X']
+prenom_annee['prenoms'] = prenom_annee['prenoms'].map(lambda x: x.decode('latin-1'))
 prenom_annee['prenoms'] = prenom_annee['prenoms'].str.lower()
 
 # On sum sur le group prenoms / sexe
@@ -45,6 +45,8 @@ grouped['proportion'] = grouped['nombre_prenoms_sexe'] / grouped['nombre_prenoms
 # Sorting on prenom ASC / proportion DESC to prepare to drop doublon
 grouped = grouped.sort(['prenoms', 'proportion'], ascending=[1,0])
 grouped = grouped.drop_duplicates('prenoms')
+grouped.index.names = ['index']
+
 print "Creating csv..."
-grouped.to_csv('data/Dico_gender_proportion.csv')
+grouped.to_csv('data/result/Dico_gender_proportion.csv', encoding='utf-8')
 

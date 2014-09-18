@@ -3,13 +3,14 @@ import pandas as pd
 import urllib2
 import os
 import string
-import nltk
 import numpy as np
-from nltk.corpus import stopwords
 
 
 
-
+"""
+Fonction
+"""
+        
 def clean_caract(x):
      try:
         t = string.maketrans('','')
@@ -105,7 +106,7 @@ Création de DF
 print "Working on Street file..."    
 street_load = pd.read_csv(data_path_street)
 drop_cols = ['GID', 'DOMANIAL', 'IDENT', 'MOTD', 'NUMEROFR', 'NUMEROEU', 'CDATE', 'MDATE']
-
+1
 # Working on colums (droping and renaming)
 street = street_load.drop(drop_cols, axis=1)
 cols_street = ['type', 'street_simple', 'code_riv', 'street_full', 'code_commune']
@@ -132,7 +133,7 @@ street['type_full'] = street['type'].map({'ave' : 'Avenue',
                                         'quai': 'Quai',
                                         'cote': 'Côte',
                                         'ech': 'Echangeur',
-                                        'cr': 'Chemin Rur',
+                                        'cr': 'Chemin Rural',
                                         'vc': 'Voie Communautaire',
                                         'ham': 'Hammeau',
                                         'pont': 'Pont',
@@ -169,6 +170,10 @@ street = street.dropna(subset=['code_commune'])
 # Creating ID for Street (to join with Quartier)
 street['code_commune'] = street['code_commune'].astype(int) # ?? Demander explication à Alex pourquoi cast Int puis STR pour enlever ".0"
 street['code_riv_commune'] = street['code_riv'] + street['code_commune'].astype(str) + street['type_full'].apply(lambda x: x[:2].lower())
+# some Street_full are emplty
+street['street_full'] = street['street_full'].fillna(street['type_full'] + street['street_simple'].str.lower())
+# some Street_full have some error (street's name + "Caud")
+street['street_full'] = street['street_full'].str.replace("Caud", "")
 
 print "Working on CUB's City file..."    
 
@@ -196,6 +201,8 @@ ilot_grouped = ilot.groupby(['ILOT_code_ilot_normalise'])['ILOT_pop_municipale',
                                                         'ILOT_nbr_logement_total'].sum().reset_index()
                                                         
 print "Merging commune's street and features of INSEE's ilot..."
+# on ne peux pas joindre un ilot sur une rue
+# on sum donc les features au niveau de la ville
 cub_street_enrich = pd.merge(street_commune, ilot_grouped,
                     left_on='COM_code_ilot', right_on='ILOT_code_ilot_normalise',
                     how='left')
@@ -203,22 +210,49 @@ cub_street_enrich = pd.merge(street_commune, ilot_grouped,
 print "Working on CUB's City file..." 
 
 quartier_bdx = pd.read_csv(data_path_quartier_bdx, sep=';')
-grouped_quartier = quartier_bdx.groupby(['CODERIVOLI', 'NOMQUARTIER','LIBELLEVOIE', 'TYPEVOIE', 'CODEPOSTAL']).count().reset_index()
-grouped_quartier = pd.DataFrame(grouped_quartier[['CODERIVOLI','NOMQUARTIER', 'LIBELLEVOIE', 'TYPEVOIE', 'CODEPOSTAL']])
-cols_grouped_quartier = ['QUAR_code_rivoli', 'QUAR_nom_quartier','QUAR_nom_voie', 'QUAR_type', 'QUAR_code_postal']
+# Il y a des doublons (un meme code_rivoli n'est pas unique (meme si on prend en compte 'COTE') => Code Postal différent)
+quartier_bdx = quartier_bdx.drop(['DEBUT', 'FIN', 'CODEPOSTAL'], axis=1)
+quartier_bdx = quartier_bdx.drop_duplicates() # on déboublonne
+
+grouped_quartier = quartier_bdx.groupby(['CODERIVOLI', 'NOMQUARTIER','LIBELLEVOIE', 'TYPEVOIE']).count().reset_index()
+grouped_quartier = pd.DataFrame(grouped_quartier[['CODERIVOLI','NOMQUARTIER', 'LIBELLEVOIE', 'TYPEVOIE']])
+cols_grouped_quartier = ['QUAR_code_rivoli', 'QUAR_nom_quartier','QUAR_nom_voie', 'QUAR_type']
 grouped_quartier.columns = cols_grouped_quartier
 grouped_quartier['QUAR_type'] = grouped_quartier['QUAR_type'].str.lower()
 grouped_quartier['QUAR_type'] = grouped_quartier['QUAR_type'].str.replace('É','e')
 
-#grouped_quartier['QUAR_type'] = grouped_quartier['QUAR_type'].map({'rÉsidence' : 'residence',
-#                                                                'Échangeur' : 'echangeur'})
+
 grouped_quartier['QUAR_code_rivoli'] = grouped_quartier['QUAR_code_rivoli'].apply(clean_caract)
 grouped_quartier['QUAR_code_rivoli_commune'] = grouped_quartier['QUAR_code_rivoli'] + '18' + grouped_quartier['QUAR_type'].apply(lambda x: x[:2]) # Bordeaux Code Commune
+# La clef QUAR_code_rivoli_commune ne suffit pas à rendre une ligne unique
+# Une rue peut etre à la limite de plusieurs quartier et possède donc plusieurs lignes dans grouped_quartier.
+# On fait un dédoublonnage arbitraire sans regle métier
+grouped_quartier = grouped_quartier.drop_duplicates('QUAR_code_rivoli_commune')
+
+# Jointure sur code_riv_commune
+cub_data = pd.merge(cub_street_enrich, grouped_quartier, left_on='code_riv_commune', right_on='QUAR_code_rivoli_commune', how='left')
+cub_data.index.names = ['index']
 
 
-Cub_data = pd.merge(cub_street_enrich, grouped_quartier, left_on='code_riv_commune', right_on='QUAR_code_rivoli_commune', how='left')
+print "Creating csv from cub_data..."
+cub_data.to_csv('data/result/Cub_data.csv')
+
+
 
 """ TO DO
-Check Features Ilot_pop et data Street
-jointure entre street_commune et ilot
-"""
+test = pd.merge(cub_data, grouped, left_on='nom_street_1', right_on='prenoms', how='left')
+test = pd.merge(test, grouped, left_on='nom_street_2', right_on='prenoms', how='left', suffixes=('_join_1', '_join_2'))
+
+
+test.sexe_join_1.fillna('Inconnu')
+test.sexe_join_2.fillna('Inconnu')
+
+test['test'] = if test.sexe_join_1 == test.sexe_join_2:
+                    test.sexe_joint_1
+                else:
+                    if (test.sexe_joint_1 != test.sexe_join_2) & (test.proportion_join_1 > test.proportion_join_2): 
+                          test.sexe_joint_1
+                    else:
+                          test.sexe_joint_2
+                )
+"""       
