@@ -7,7 +7,7 @@ from nominatim import Nominatim
 import sys
 import timeit
 
-start = timeit.default_timer()
+start_street_name = timeit.default_timer()
 
 
 street = Nominatim()
@@ -21,21 +21,22 @@ cwd_result = os.path.join(cwd, 'data/result')
 file_result_cub = 'result_cub.csv'
 data_path_result_cub = os.path.join(cwd_result, file_result_cub)
 osm_count = 0
-
+"""
+ OLD
 def get_osmid(x):
     global osm_count
     osm_count = osm_count + 1
     try:
-        osm_id = street.query(x.decode('latin-1'))[0]['osm_id']
+        osm_id = street.query(x.encode('latin-1'))[0]['osm_id']
         print str(osm_count) + ' :' + str(osm_id) + ': '  + x
     except:
         osm_id = np.nan
         print str(osm_count) + ' :' + str(osm_id) + ': ' + x
     return (osm_id)
-    
+"""    
 def get_way(way_name, way_gender):
     try:
-        query = street.query(way_name.encode('windows-1252'))
+        query = street.query(way_name.encode('utf-8'))
         way_osm_id = query[0]['osm_id']
         lat = query[0]['lat']
         lon = query[0]['lon']
@@ -138,7 +139,7 @@ C = a * np.cos(phi1) * np.exp(n * L(phi1)) / (n * np.sqrt(1 - np.power(e * np.si
 # Loading file
 
 print "Loading the result of Cub Street..."
-data = pd.read_csv(data_path_result_cub, index_col=[0])
+data = pd.read_csv(data_path_result_cub, index_col=[0], encoding='latin-1')
 
 #data['lonlat'] = data.apply(lambda x: toLontLat(x['COM_abscisse'], x['COM_ordonne']), axis=1)
 #data['longitude'] = data['lonlat'].apply(lambda x: x[0])
@@ -149,7 +150,7 @@ osm_info = []
 data['way_osm_id']= ''
 data['lat']= ''
 data['lon']= ''
-data = data.head(2000)
+#data = data.head(10)
 for index, row in data.iterrows():
     osm_info.append(get_way(row['adresse'], row['street_genre']))
     data.loc[index, 'way_osm_id'] = osm_info[index][0]
@@ -157,11 +158,44 @@ for index, row in data.iterrows():
     data.loc[index, 'lon'] = osm_info[index][2]
     #small_data['osm_way_id'] = small_data.apply(lambda x: x.)
     print "index : " + str(index)
-stop = timeit.default_timer()
-print stop - start
+stop_street_name = timeit.default_timer()
+print stop_street_name - start_street_name
 
 #data['osm_id'] = data['adresse'].apply(get_osmid)
+start_geo_street = timeit.default_timer()
 
+df = pd.DataFrame(columns=['way_osm_id', 'node_osm_id', 'node_lat', 'node_lon'])
+
+data = data.dropna(subset=["way_osm_id"])
+
+
+for index, row in data.iterrows():
+    try:
+        way = osm.WayGet(int(row.way_osm_id))
+        nb_node = 0
+        print "way : " + str(index)
+        while nb_node < len(way[u'nd']):
+            node = osm.NodeGet(way[u'nd'][nb_node])
+            df.loc[len(df)+1] = [row.way_osm_id, node[u'id'], node[u'lat'], node[u'lon']]
+            print "node : " + str(nb_node)
+            nb_node = nb_node + 1
+    except:
+        pass
+
+print "Merging data..."
+#merging data
+geo_street = pd.merge(data, df, left_on='way_osm_id', right_on='way_osm_id', how='left')
+
+geo_street = geo_street[['way_osm_id', 'adresse', 'street_genre', 'node_lat', 'node_lon']]
+
+stop_geo_street = timeit.default_timer()
+
+print "temps de recherche nom de rue : " + str(stop_street_name - start_street_name)
+print "temps de recherche geo sur les rues : " + str(stop_geo_street - start_geo_street)
+
+print "Create csv..."
+
+geo_street.to_csv('geo_street.csv', encoding='latin-1')
 
 """osm_id = street.query('rue des faussets bordeaux')[0]['osm_id']
 wayrelation = osm.WayRelations(int(osm_id))
@@ -241,6 +275,13 @@ while n < len(nodesid):
         lon.append(nd['lon'])
     n = n + 1
 
+
+
+for way in small_geo_street:
+    plt.plot(small_geo_street['node_lat'], small_geo_street['node_lon'], label=small_geo_street['street_genre'])
+
+plt.legend()
+plt.show() 
 """
 
     

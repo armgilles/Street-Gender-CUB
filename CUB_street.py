@@ -4,6 +4,7 @@ import urllib2
 import os
 import string
 import numpy as np
+import codecs
 
 
 
@@ -104,7 +105,7 @@ Création de DF
 """
 
 print "Working on Street file..."    
-street_load = pd.read_csv(data_path_street)
+street_load = pd.read_csv(data_path_street, encoding='latin-1')
 drop_cols = ['GID', 'DOMANIAL', 'IDENT', 'MOTD', 'NUMEROFR', 'NUMEROEU', 'CDATE', 'MDATE']
 1
 # Working on colums (droping and renaming)
@@ -169,9 +170,13 @@ street['type_full'] = street['type'].map({'ave' : 'Avenue',
 street = street.dropna(subset=['code_commune'])
 # Creating ID for Street (to join with Quartier)
 street['code_commune'] = street['code_commune'].astype(int) # ?? Demander explication à Alex pourquoi cast Int puis STR pour enlever ".0"
-street['code_riv_commune'] = street['code_riv'] + street['code_commune'].astype(str) + street['type_full'].apply(lambda x: x[:2].lower())
+street['code_riv_commune'] = street['code_riv'] + street['code_commune'].astype(str) + street['type_full'].apply(lambda x: x[:2].decode('latin-1').lower())
 # some Street_full are emplty
-street['street_full'] = street['street_full'].fillna(street['type_full'] + street['street_simple'].str.lower())
+"""
+Problème encoding
+TO DO
+"""
+#street['street_full'] = street['street_full'].fillna(street['type_full'] + street['street_simple'].str.lower())
 # some Street_full have some error (street's name + "Caud")
 street['street_full'] = street['street_full'].str.replace("Caud", "")
 
@@ -180,7 +185,7 @@ print "Working on CUB's City file..."
 # Certaines rue n'ont pas de code commune
 #len(street[street.code_commune.isnull()]) = 53
 cols_commune = ['COM_code_commune', 'COM_code_ilot', 'COM_nom_commune_maj','COM_abscisse', 'COM_ordonne','COM_orientation', 'COM_nom_commune', 'COM_date_creation', 'COM_date_modifiction']
-commune = pd.read_csv(data_path_commune)
+commune = pd.read_csv(data_path_commune, encoding='latin-1')
 commune.columns = cols_commune
 commune['COM_code_commune'] = commune['COM_code_commune'].astype(int)
 
@@ -235,7 +240,7 @@ cub_data.index.names = ['index']
 
 
 print "Creating csv from cub_data..."
-cub_data.to_csv('data/result/Cub_data.csv')
+cub_data.to_csv('data/result/Cub_data.csv', encoding='latin-1')
 
 
 
