@@ -4,7 +4,6 @@ import urllib2
 import os
 import string
 import numpy as np
-import codecs
 
 
 
@@ -171,19 +170,12 @@ street = street.dropna(subset=['code_commune'])
 # Creating ID for Street (to join with Quartier)
 street['code_commune'] = street['code_commune'].astype(int) # ?? Demander explication à Alex pourquoi cast Int puis STR pour enlever ".0"
 street['code_riv_commune'] = street['code_riv'] + street['code_commune'].astype(str) + street['type_full'].apply(lambda x: x[:2].decode('latin-1').lower())
-# some Street_full are emplty
-"""
-Problème encoding
-TO DO
-"""
-#street['street_full'] = street['street_full'].fillna(street['type_full'] + street['street_simple'].str.lower())
-# some Street_full have some error (street's name + "Caud")
+
+# Cleaning some data
 street['street_full'] = street['street_full'].str.replace("Caud", "")
 
 print "Working on CUB's City file..."    
 
-# Certaines rue n'ont pas de code commune
-#len(street[street.code_commune.isnull()]) = 53
 cols_commune = ['COM_code_commune', 'COM_code_ilot', 'COM_nom_commune_maj','COM_abscisse', 'COM_ordonne','COM_orientation', 'COM_nom_commune', 'COM_date_creation', 'COM_date_modifiction']
 commune = pd.read_csv(data_path_commune, encoding='latin-1')
 commune.columns = cols_commune
@@ -215,9 +207,8 @@ cub_street_enrich = pd.merge(street_commune, ilot_grouped,
 print "Working on CUB's City file..." 
 
 quartier_bdx = pd.read_csv(data_path_quartier_bdx, sep=';')
-# Il y a des doublons (un meme code_rivoli n'est pas unique (meme si on prend en compte 'COTE') => Code Postal différent)
 quartier_bdx = quartier_bdx.drop(['DEBUT', 'FIN', 'CODEPOSTAL'], axis=1)
-quartier_bdx = quartier_bdx.drop_duplicates() # on déboublonne
+quartier_bdx = quartier_bdx.drop_duplicates()
 
 grouped_quartier = quartier_bdx.groupby(['CODERIVOLI', 'NOMQUARTIER','LIBELLEVOIE', 'TYPEVOIE']).count().reset_index()
 grouped_quartier = pd.DataFrame(grouped_quartier[['CODERIVOLI','NOMQUARTIER', 'LIBELLEVOIE', 'TYPEVOIE']])
@@ -229,35 +220,11 @@ grouped_quartier['QUAR_type'] = grouped_quartier['QUAR_type'].str.replace('É','
 
 grouped_quartier['QUAR_code_rivoli'] = grouped_quartier['QUAR_code_rivoli'].apply(clean_caract)
 grouped_quartier['QUAR_code_rivoli_commune'] = grouped_quartier['QUAR_code_rivoli'] + '18' + grouped_quartier['QUAR_type'].apply(lambda x: x[:2]) # Bordeaux Code Commune
-# La clef QUAR_code_rivoli_commune ne suffit pas à rendre une ligne unique
-# Une rue peut etre à la limite de plusieurs quartier et possède donc plusieurs lignes dans grouped_quartier.
-# On fait un dédoublonnage arbitraire sans regle métier
 grouped_quartier = grouped_quartier.drop_duplicates('QUAR_code_rivoli_commune')
 
-# Jointure sur code_riv_commune
 cub_data = pd.merge(cub_street_enrich, grouped_quartier, left_on='code_riv_commune', right_on='QUAR_code_rivoli_commune', how='left')
 cub_data.index.names = ['index']
 
 
 print "Creating csv from cub_data..."
 cub_data.to_csv('data/result/Cub_data.csv', encoding='latin-1')
-
-
-
-""" TO DO
-test = pd.merge(cub_data, grouped, left_on='nom_street_1', right_on='prenoms', how='left')
-test = pd.merge(test, grouped, left_on='nom_street_2', right_on='prenoms', how='left', suffixes=('_join_1', '_join_2'))
-
-
-test.sexe_join_1.fillna('Inconnu')
-test.sexe_join_2.fillna('Inconnu')
-
-test['test'] = if test.sexe_join_1 == test.sexe_join_2:
-                    test.sexe_joint_1
-                else:
-                    if (test.sexe_joint_1 != test.sexe_join_2) & (test.proportion_join_1 > test.proportion_join_2): 
-                          test.sexe_joint_1
-                    else:
-                          test.sexe_joint_2
-                )
-"""       

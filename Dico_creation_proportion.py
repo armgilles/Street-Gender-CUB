@@ -28,20 +28,18 @@ else:
     
 print "Working on it..."    
 prenom_annee = pd.read_csv(data_path, sep=';', skiprows=1, names=['prenoms', 'sexe', 'annee', 'nombre', 'ville'])
-# Plusieurs ville n'ont pas de renseignement sur le sexe.
+# Some Cleaning.
 prenom_annee = prenom_annee.dropna()
-# On supprime les naissances sous 'X'
 prenom_annee = prenom_annee[prenom_annee.sexe != 'X']
 prenom_annee['prenoms'] = prenom_annee['prenoms'].map(lambda x: x.decode('latin-1'))
 prenom_annee['prenoms'] = prenom_annee['prenoms'].str.lower()
 
-# On sum sur le group prenoms / sexe
+# groupby sexe & firstname
 group_prenoms_sexe = pd.DataFrame({'nombre_prenoms_sexe' : prenom_annee.groupby(['prenoms', 'sexe'])['nombre'].sum()}).reset_index()
-# On sum sur uniquement prenoms
 group_prenoms = pd.DataFrame({'nombre_prenoms' : prenom_annee.groupby(['prenoms'])['nombre'].sum()}).reset_index()
-
 grouped = pd.merge(group_prenoms_sexe, group_prenoms, left_on='prenoms', right_on='prenoms', how='outer')
 grouped['proportion'] = grouped['nombre_prenoms_sexe'] / grouped['nombre_prenoms']
+
 # Sorting on prenom ASC / proportion DESC to prepare to drop doublon
 grouped = grouped.sort(['prenoms', 'proportion'], ascending=[1,0])
 grouped = grouped.drop_duplicates('prenoms')
@@ -49,4 +47,3 @@ grouped.index.names = ['index']
 
 print "Creating csv..."
 grouped.to_csv('data/result/Dico_gender_proportion.csv', encoding='utf-8')
-
