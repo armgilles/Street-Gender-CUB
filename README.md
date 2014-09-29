@@ -16,3 +16,8 @@ Library :
 - numpy
 - nltk
 - string
+
+Files :
+- Dico_creation_proportion.py : Create a dictionnary of firstname / gender
+- CUB_street.py : Load and merge CUB's streets
+- Analyse_gender.py : Gender model
